@@ -18,7 +18,7 @@ def load_csv(filepath):
     """
     df = pd.read_csv(filepath)
     logger.info(f"Loaded CSV file: {filepath}")
-
+    return df
 
 def load_json(filepath):
     """Load a JSON file into a Python object (dict or list).
@@ -27,7 +27,7 @@ def load_json(filepath):
     with open(filepath, 'r') as f:
         data = json.load(f)
         logger.info(f"Loaded JSON file: {filepath}")
-
+    return data
 
 
 def load_yaml(filepath):
