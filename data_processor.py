@@ -1,15 +1,16 @@
-# data_processor.py
 import logging
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
 
 def remove_duplicates(df):
     """Remove duplicate rows."""
     before = len(df)
     df = df.drop_duplicates()
     after = len(df)
-    logger.info(f"Removed duplicates: {before - after} rows dropped.")
+    logger.debug(f"Removed duplicates: {before} rows to {after} rows")
+    return df
 
 
 def handle_missing(df, axis="rows"):
@@ -18,52 +19,81 @@ def handle_missing(df, axis="rows"):
         before = len(df)
         df = df.dropna(axis=0)
         after = len(df)
-        logger.info(f"Removed missing values: {before - after} rows dropped.")
+        logger.debug(f"Removed missing rows: {before} rows to {after} rows")
     elif axis == "columns":
         before = len(df.columns)
         df = df.dropna(axis=1)
         after = len(df.columns)
-        logger.info(f"Removed missing values: {before - after} columns dropped.")
+        logger.debug(f"Removed missing columns: {before} columns to {after} columns")
     else:
-        logger.error(f"Invalid axis: {axis}")
+        logger.error(f"Unsupported axis: {axis}")
+        raise ValueError(f"Unsupported axis: {axis}")
+    return df
+
 
 def remove_outliers(df, columns, method, threshold):
     """Remove outliers from the specified numeric columns."""
+    if method != "iqr" and method != "zscore":
+        logger.error(f"Unsupported outlier method: {method}")
+        raise ValueError(f"Unsupported outlier method: {method}")
     for column in columns:
-        if method == "zscore":
-            mean = df[column].mean()
-            std = df[column].std()
-            z_scores = (df[column] - mean) / std
-            before = len(df)
-            df = df[abs(z_scores) < threshold]
-            after = len(df)
-            logger.info(f"Outliers removed from {column}: {before - after} rows dropped.")
-        elif method == "iqr":
+        if column not in df.columns:
+            logger.warning(f"Column not found: {column}")
+            continue
+
+        before = len(df)
+
+        if method == "iqr":
             Q1 = df[column].quantile(0.25)
             Q3 = df[column].quantile(0.75)
             IQR = Q3 - Q1
-            lower_bound = Q1 - threshold * IQR
-            upper_bound = Q3 + threshold * IQR
-            before = len(df)
-            df = df[(df[column] >= lower_bound) & (df[column] <= upper_bound)]
+            lower = Q1 - threshold * IQR
+            upper = Q3 + threshold * IQR
+            df = df[(df[column] >= lower) & (df[column] <= upper)]
             after = len(df)
-            logger.info(f"Outliers removed from {column}: {before - after} rows dropped.")
+            rows_removed = before - after
+            logger.debug(
+                f"{column}: method={method}, threshold={threshold}, "
+                f"lower={lower}, upper={upper}, removed={rows_removed}"
+            )
         else:
-            logger.error(f"Unknown method: {method}")
+            mean = df[column].mean()
+            std = df[column].std()
+            if std == 0:
+                logger.debug(f"{column}: has same values, hence no outliers removed")
+                continue
+
+            z_scores = (df[column] - mean) / std
+            df = df[z_scores.abs() <= threshold]
+            rows_removed = before - len(df)
+            logger.debug(
+                f"{column}: method={method}, threshold={threshold}, "
+                f"removed={rows_removed}"
+            )
+
+    return df
 
 
 def process_data(df, config):
     """Apply the processing steps enabled in the configuration."""
-    if config.get("remove_duplicates", False):
-        remove_duplicates(df)
-    if config.get("handle_missing", False):
-        axis = config.get("missing_axis", "rows")
-        handle_missing(df, axis=axis)
-    if config.get("remove_outliers", False):
-        col = config.get("outlier_columns", [])
-        method = config.get("outlier_method", "zscore")
-        threshold = config.get("outlier_threshold", 3)
-        remove_outliers(df, columns=col, method=method, threshold=threshold)
+    settings = config["processing"]
+
+    if settings.get("remove_duplicates", False):
+        df = remove_duplicates(df)
+
+    missing_settings = settings["missing"]
+    if missing_settings["enabled"]:
+        axis = missing_settings["axis"]
+        df = handle_missing(df, axis)
+
+    outliers_settings = settings["outliers"]
+    if outliers_settings["enabled"]:
+        columns = outliers_settings["columns"]
+        method = outliers_settings["method"]
+        threshold = outliers_settings["threshold"]
+        df = remove_outliers(df, columns, method, threshold)
+
+    return df
 
 
 def create_cleaning_report(df_before, df_after):

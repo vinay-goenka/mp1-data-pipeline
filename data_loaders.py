@@ -17,7 +17,7 @@ def load_csv(filepath):
     filepath is a Path object.
     """
     df = pd.read_csv(filepath)
-    logger.info(f"Loaded CSV file: {filepath}")
+    logger.info(f"Loaded CSV file: {filepath} ({len(df)} rows)")
     return df
 
 def load_json(filepath):
