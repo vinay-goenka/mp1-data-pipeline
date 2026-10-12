@@ -41,6 +41,11 @@ def remove_outliers(df, columns, method, threshold):
             logger.warning(f"Column not found: {column}")
             continue
 
+        column_type = df[column].dtype
+        if column_type !="int64" and column_type != "float64":
+            logger.warning(f"Column is not numeric: {column}")
+            continue
+        
         before = len(df)
 
         if method == "iqr":

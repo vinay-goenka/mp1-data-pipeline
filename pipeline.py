@@ -81,7 +81,6 @@ def main():
     except ValueError:
         sys.exit(1)
 
-    df_before = data.copy()
     required_columns = config["validation"]["required_columns"]
     numeric_columns = config["validation"]["numeric_columns"]
     before_validation = len(data)
@@ -92,13 +91,14 @@ def main():
         sys.exit(1)
 
     after_validation = len(df_valid)
+    df_before = df_valid.copy()
     logger.info(f"Validation finished: {before_validation} rows before, {after_validation} rows after")
     try:
         df_clean = process_data(df_valid, config)
     except ValueError:
         sys.exit(1)
 
-    report = create_cleaning_report(df_before, df_clean)
+    report = create_cleaning_report(df_valid, df_clean)
     logger.info(
         f"Processing finished: {report['rows_before']} rows to {report['rows_after']} rows"
     )
