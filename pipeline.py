@@ -11,25 +11,18 @@ Usage:
 import argparse
 import logging
 import sys
-from pathlib import Path
-from data_loaders import load_data
-from data_processor import process_data, create_cleaning_report
-
+from src import (
+    create_cleaning_report,
+    load_data,
+    process_data,
+    save_data,
+    setup_logging,
+    validate_dataframe,
+    validate_input,
+)
 
 
 logger = logging.getLogger(__name__)
-
-def setup_logging(verbose=False):
-    """Configure logging for the pipeline."""
-    if verbose:
-        level = logging.DEBUG
-    else:
-        level = logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
-        datefmt="%H:%M:%S",
-    )
 
 def parse_arguments():
     """Parse command-line arguments."""
@@ -66,13 +59,6 @@ def parse_arguments():
     )
     return parser.parse_args()
 
-def validate_input(filepath):
-    """Check whether the input path exists and is a file."""
-    if not Path(filepath).is_file():
-        logger.error(f"Input file not found: {filepath}")
-        return False
-    logger.info(f"Input file validated: {filepath}")
-    return True
 
 def main():
     """Main pipeline function."""
@@ -96,19 +82,30 @@ def main():
         sys.exit(1)
 
     df_before = data.copy()
+    required_columns = config["validation"]["required_columns"]
+    numeric_columns = config["validation"]["numeric_columns"]
+    before_validation = len(data)
+
     try:
-        df_clean = process_data(data, config)
+        df_valid = validate_dataframe(data, required_columns, numeric_columns)
+    except ValueError:
+        sys.exit(1)
+
+    after_validation = len(df_valid)
+    logger.info(f"Validation finished: {before_validation} rows before, {after_validation} rows after")
+    try:
+        df_clean = process_data(df_valid, config)
     except ValueError:
         sys.exit(1)
 
     report = create_cleaning_report(df_before, df_clean)
-    print(report)
     logger.info(
-        f"Processing complete: {report['rows_before']} rows to {report['rows_after']} rows"
+        f"Processing finished: {report['rows_before']} rows to {report['rows_after']} rows"
     )
 
-    df_clean.to_csv(args.output, index=False)
-    logger.info(f"Saved cleaned data to {args.output}")
+    output_path = save_data(df_clean, args.output)
+    logger.info(f"Saved cleaned data to {output_path}")
+    print(report)
 
 if __name__ == "__main__":
     main()
